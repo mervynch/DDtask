@@ -1,18 +1,43 @@
-# Stage 1: Build Angular
+# --------------------------
+# STAGE 1: Build Angular Frontend
+# --------------------------
 FROM node:18 AS frontend-build
+
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm install
 COPY frontend/ .
 RUN npm run build
 
-# Stage 2: Setup Nginx
-FROM nginx:alpine
-# <-- COPY Angular build to Nginx
-COPY --from=frontend-build /app/frontend/dist/<app-name> /usr/share/nginx/html
+# --------------------------
+# STAGE 2: Setup Backend
+# --------------------------
+FROM node:18 AS backend-build
 
-# Copy your nginx config
+WORKDIR /app/backend
+COPY backend/package*.json ./
+RUN npm install
+COPY backend/ .
+
+# --------------------------
+# STAGE 3: Final Image with Nginx + Node
+# --------------------------
+FROM nginx:alpine
+
+# Copy Angular build to Nginx
+COPY --from=frontend-build /app/frontend/dist/angular-15-crud /usr/share/nginx/html
+
+# Copy custom Nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+# Copy backend
+COPY --from=backend-build /app/backend /app/backend
+
+# Install Node runtime in Nginx image
+RUN apk add --no-cache nodejs npm
+
+# Expose port 80 for Nginx
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+
+# Start both backend & Nginx
+CMD node /app/backend/server.js & nginx -g 'daemon off;'
